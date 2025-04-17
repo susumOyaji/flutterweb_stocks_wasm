@@ -1,0 +1,89 @@
+この GitHub Actions のワークフローは、Flutter Web アプリケーションをビルドして GitHub Pages にデプロイする処理を自動化するものです。以下に各部分の役割を詳しく説明します。
+
+name: Deploy to Flutter
+このワークフローの名前を定義します。GitHub Actions の画面などで表示されます。
+
+on:
+このセクションでは、ワークフローが実行されるトリガーとなるイベントを設定します。
+
+push:
+
+branches:
+- master: master ブランチにプッシュ（コミットの追加や変更）があった場合に、このワークフローが自動的に実行されます。
+#workflow_dispatch:
+コメントアウトされていますが、もしこのコメントを外すと、GitHub Actions の画面から手動でこのワークフローを実行できるようになります。
+
+jobs:
+このセクションでは、実行するジョブ（一連のステップ）を定義します。ここでは build という名前のジョブが定義されています。
+
+build:
+runs-on: ubuntu-latest: このジョブを実行する仮想環境として、最新の Ubuntu Linux を使用することを指定します。
+
+timeout-minutes: 30: このジョブの実行時間の最大許容時間を 30 分に設定します。これを超えるとジョブは強制的に終了します。
+
+steps:
+このセクションでは、ジョブ内で実行する個々のステップを定義します。各ステップは順番に実行されます。
+
+- uses: actions/checkout@v3
+GitHub の公式アクションである actions/checkout@v3 を使用して、リポジトリのコードを仮想環境にチェックアウト（ダウンロード）します。これにより、ワークフロー内でコードを操作できるようになります。
+
+with:
+token: ${{ secrets.GITHUB_TOKEN }}: チェックアウトに必要なトークンを指定します。secrets.GITHUB_TOKEN は GitHub が自動的に提供するトークンで、リポジトリへの書き込み権限などを持っています。
+- name: Repository
+このステップの名前を "Repository" と定義します。
+
+id: version: このステップに version という ID を付与します。これにより、このステップの出力を他のステップから参照できるようになります。
+run: | ...: 複数のコマンドをまとめて実行します。
+REPOSITORY=$(echo ${{ github.repository }} | sed -e "s#.*/##"): 環境変数 REPOSITORY に、現在の GitHub リポジトリの名前（例: username/repository_name から repository_name の部分）を設定します。github.repository はリポジトリのフルネームを提供し、sed コマンドで不要な部分を削除しています。
+echo ::set-output name=repository::$REPOSITORY: このステップの出力を設定します。repository という名前で、先ほど取得したリポジトリ名を他のステップから参照できるようになります。
+- name: Flutter
+このステップの名前を "Flutter" と定義します。
+
+uses: subosito/flutter-action@v2: Flutter 開発環境をセットアップするためのコミュニティアクション subosito/flutter-action@v2 を使用します。
+with:
+flutter-version: '3.0.5': 使用する Flutter SDK のバージョンを 3.0.5 に指定します。
+channel: 'stable': 使用する Flutter のチャンネルを stable に指定します。
+cache: true: Flutter SDK や依存関係をキャッシュし、ワークフローの実行時間を短縮します。
+- run: flutter --version: Flutter のバージョン情報を出力します。セットアップが正しく行われたかを確認するために使用されます。
+
+- run: flutter pub get: Flutter プロジェクトの依存関係を解決し、ダウンロードします。（pubspec.yaml ファイルに記述されたパッケージを取得します）
+
+- run: flutter build web --web-renderer html: Flutter Web アプリケーションを HTML レンダラーを使用してビルドします。これにより、より互換性の高い Web アプリケーションが生成されます。
+
+- run: flutter build web --base-href /${{ steps.version.outputs.repository }}/: Flutter Web アプリケーションをビルドし、--base-href オプションを指定します。base-href は、アプリケーションがデプロイされるベースとなるパスを指定するために使用されます。ここでは、前のステップで取得したリポジトリ名をベースパスとして使用しています。これにより、リポジトリ名が URL の一部となる GitHub Pages 環境でアプリケーションが正しく動作するようになります。
+
+- run: ls -R: 現在のディレクトリ以下のファイルとディレクトリを再帰的にリスト表示します。ビルドされたファイルなどを確認するために使用されます。
+
+- name: Deploy
+このステップの名前を "Deploy" と定義します。
+
+uses: peaceiris/actions-gh-pages@v3: GitHub Pages にデプロイするためのコミュニティアクション peaceiris/actions-gh-pages@v3 を使用します。
+with:
+github_token: ${{ secrets.GITHUB_TOKEN }}: GitHub Pages への書き込みに必要なトークンを指定します。
+publish_dir: build/web/: デプロイするファイルを格納したディレクトリを指定します。ここでは、Flutter Web のビルド出力ディレクトリである build/web/ を指定しています。
+publish_branch: gh-pages: デプロイ先のブランチを指定します。通常、GitHub Pages は gh-pages ブランチからコンテンツを公開します。
+- name: build/web to outputs
+このステップの名前を "build/web to outputs" と定義します。
+
+uses: actions/upload-artifact@v3: GitHub Actions の成果物をアップロードするための公式アクション actions/upload-artifact@v3 を使用します。
+with:
+name: outputs: アップロードする成果物の名前を "outputs" と定義します。
+path: build/web/: アップロードするファイルのパスを指定します。ここでは、Flutter Web のビルド出力ディレクトリ全体をアップロードします。 このステップにより、ワークフローの実行後に build/web/ ディレクトリの内容をダウンロードできるようになります。コメントにもあるように、本来は apk ファイルや aab ファイルなどのネイティブアプリの成果物をダウンロードできるようにするための設定ですが、ここでは Web ビルドの成果物をアップロードしています。
+#say_hello:
+コメントアウトされているジョブです。もしコメントを外すと、say_hello という名前の別のジョブが定義されます。
+
+#runs-on: ubuntu-latest: このジョブも Ubuntu Linux で実行されます。
+#steps:
+#- run: echo "Hello World! to Flutter to Flutter": 単に "Hello World! to Flutter to Flutter" というメッセージをコンソールに出力するステップです。このジョブは現在のワークフローの主要な機能とは直接関係ありません。
+このコードの役目:
+
+この GitHub Actions のコードは、以下の処理を自動化します。
+
+master ブランチにコードがプッシュされると自動的に起動します。
+最新の Ubuntu 環境で Flutter 開発に必要な SDK をセットアップします。
+Flutter プロジェクトの依存関係を解決します。
+Flutter Web アプリケーションを HTML レンダラーを使用してビルドします。
+ビルドされた Web アプリケーションを、リポジトリ名に基づいたベース URL で再度ビルドします。
+ビルドされた Web アプリケーションのファイルを gh-pages ブランチにプッシュし、GitHub Pages で公開します。
+ビルドされた Web アプリケーションの成果物を GitHub Actions の成果物としてアップロードし、ダウンロードできるようにします。
+これにより、Flutter Web アプリケーションの開発者は、コードを master ブランチにプッシュするだけで、自動的に最新のアプリケーションが GitHub Pages にデプロイされるようになります。
