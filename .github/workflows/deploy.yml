@@ -1,0 +1,45 @@
+name: Build and Deploy Flutter Web with Rust to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main  # ← mainブランチに push されたら実行
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build Rust to WASM
+        working-directory: rust_wasm
+        run: |
+          cargo install wasm-bindgen-cli --force
+          cargo build --target wasm32-unknown-unknown --release
+          wasm-bindgen target/wasm32-unknown-unknown/release/*.wasm --out-dir ../build/web/rust_wasm --target web
+
+      - name: Build Flutter Web
+        run: flutter build web --base-href="/${{ github.event.repository.name }}/"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
