@@ -4,7 +4,7 @@ name: Deploy to Flutter
 on:  # onで実行タイミングを設定
   push:
     branches:
-      - master
+      - main
 
   #workflow_dispatch: # 手動で実行するAction
 
